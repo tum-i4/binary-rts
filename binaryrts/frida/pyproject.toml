@@ -1,0 +1,19 @@
+[tool.poetry]
+name = "binaryrts-frida"
+version = "0.1.0"
+description = ""
+authors = ["Daniel Elsner <daniel.elsner@tum.de>"]
+exclude = ["src/binaryrts_frida/agent"]
+include = ["src/binaryrts_frida/agent/_agent.js"]
+
+[tool.poetry.dependencies]
+python = "^3.8"
+frida = "^15.1.28"
+frida-tools = "^10.8.0"
+
+[tool.poetry.scripts]
+binaryrts-frida = "binaryrts_frida.main:main"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"

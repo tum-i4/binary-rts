@@ -1,0 +1,22 @@
+[tool.poetry]
+name = "binaryrts"
+version = "0.1.0"
+description = ""
+authors = ["Daniel Elsner <daniel.elsner@tum.de>"]
+include = ["src/binaryrts/bin/*"]
+
+[tool.poetry.dependencies]
+python = "^3.8"
+GitPython = "^3.1.27"
+typer = {extras = ["all"], version = "^0.4.1"}
+numpy = "^1.22.4"
+
+[tool.poetry.dev-dependencies]
+pytest = "^7.1.2"
+
+[tool.poetry.scripts]
+binaryrts = "binaryrts.main:app"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"

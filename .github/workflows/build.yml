@@ -1,0 +1,102 @@
+name: Build and Test BinaryRTS 
+
+on:
+  push:
+    branches: [ main ]
+    tags:
+      - "v*.*.*"
+    paths-ignore:
+      - '**.md'
+  pull_request:
+    branches: [ main ]
+    paths-ignore:
+      - '**.md'
+
+jobs:
+  ci:
+    strategy:
+      matrix:
+        python-version: [ 3.9 ]
+        poetry-version: [ 1.2.0 ]
+        os: [ ubuntu-20.04, windows-2019 ]
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+
+    - name: Set Python version
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Install ctags and cscope (Linux)
+      if: ${{ matrix.os == 'ubuntu-20.04' }}
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y cscope \
+          libseccomp-dev \
+          libjansson-dev \
+          libyaml-dev \
+          libxml2-dev
+
+        git clone https://github.com/universal-ctags/ctags.git /tmp/ctags
+        cd /tmp/ctags
+        git checkout "p5.9.20221023.0"
+        ./autogen.sh
+        ./configure
+        make
+        make install
+        ctags --list-features
+
+    - name: Install ctags (Windows)
+      if: ${{ matrix.os == 'windows-2019' }}
+      run: |
+        mkdir C:\tmp
+        $source = 'https://github.com/universal-ctags/ctags-win32/releases/download/p5.9.20221023.0/ctags-p5.9.20221023.0-x64.zip'
+        $destination = 'C:\tmp\ctags.zip'
+        Invoke-RestMethod -Uri $source -OutFile $destination
+        7z x $destination -oC:\tmp
+        Move-Item -Path C:\tmp\ctags.exe -Destination binaryrts\cli\src\binaryrts\bin\ctags.exe
+        binaryrts\cli\src\binaryrts\bin\ctags.exe --list-features
+
+    - name: Build C++ with cmake
+      run: |
+        mkdir build
+        cd build
+        cmake -DCMAKE_BUILD_TYPE=Debug ..
+        cmake --build . --config Debug
+
+    - name: Test BinaryRTS DR client (Linux)
+      if: ${{ matrix.os == 'ubuntu-20.04' }}
+      run: |
+        echo "unittests" > modules.txt
+        build/_deps/dynamorio-src/bin64/drrun -c build/binaryrts/client/libbinary_rts_client.so -modules modules.txt -logdir unittests -runtime_dump -syscalls -- build/sample/tests/unittests 
+        build/binaryrts/resolver/binary_rts_resolver -root unittests -regex ".*sample.*"
+        python -c "from pathlib import Path; assert 'sample/tests/testfoo.cpp' in Path('unittests/1.log').read_text()"
+
+    - name: Test BinaryRTS DR client (Windows)
+      if: ${{ matrix.os == 'windows-2019' }}
+      run: |
+        echo "unittests.exe" > modules.txt
+        build\_deps\dynamorio-src\bin64\drrun.exe -c build\binaryrts\client\Debug\binary_rts_client.dll -modules modules.txt -logdir unittests -runtime_dump -syscalls -- build\sample\tests\Debug\unittests.exe 
+        build\binaryrts\resolver\binary_rts_resolver.exe -root unittests -regex ".*sample.*"
+        python -c "from pathlib import Path; assert 'sample\\tests\\testfoo.cpp' in Path('unittests\\1.log').read_text()" 
+    
+    - name: Set Poetry version 
+      uses: abatilo/actions-poetry@v2
+      with:
+        poetry-version: ${{ matrix.poetry-version }}
+
+    - name: Install CLI dependencies
+      run: |
+        cd binaryrts/cli
+        poetry install
+
+    - name: Run CLI tests
+      run: |
+        cd binaryrts/cli
+        git config --global user.email "test@binaryrts.edu"
+        git config --global user.name "Test BinaryRTS"
+        poetry run pytest tests/ 

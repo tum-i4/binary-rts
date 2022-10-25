@@ -1,0 +1,17 @@
+{
+  "name": "binaryrts-frida-agent",
+  "version": "1.0.0",
+  "description": "TypeScript frida agent that is injected through the BinaryRTS frida python script.",
+  "private": true,
+  "main": "index.ts",
+  "scripts": {
+    "prepare": "npm run build",
+    "build": "frida-compile index.ts -o _agent.js -c",
+    "watch": "frida-compile index.ts -o _agent.js -w"
+  },
+  "devDependencies": {
+    "@types/frida-gum": "^18.1.0",
+    "@types/node": "^17.0.45",
+    "frida-compile": "^10.2.5"
+  }
+}
