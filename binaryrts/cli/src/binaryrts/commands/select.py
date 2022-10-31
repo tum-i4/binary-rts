@@ -282,14 +282,14 @@ def cpp(
                 to_revision=opts.to_revision,
             )
 
-            (output_dir / INCLUDED_TESTS_FILE).write_text("\n".join(included_tests))
-            (output_dir / EXCLUDED_TESTS_FILE).write_text("\n".join(excluded_tests))
+            (output_dir / INCLUDED_TESTS_FILE).write_text("\n".join(included_tests), encoding="utf-8")
+            (output_dir / EXCLUDED_TESTS_FILE).write_text("\n".join(excluded_tests), encoding="utf-8")
             with (output_dir / SELECTION_CAUSES_FILE).open("w+") as fp:
                 json.dump(selection_causes, fp)
         except Exception as e:
             logging.error(f"Error occurred in RTS, falling back to retest-all: {e}")
-            (output_dir / INCLUDED_TESTS_FILE).write_text("*")
-            (output_dir / EXCLUDED_TESTS_FILE).write_text("")
+            (output_dir / INCLUDED_TESTS_FILE).write_text("*", encoding="utf-8")
+            (output_dir / EXCLUDED_TESTS_FILE).write_text("", encoding="utf-8")
             with (output_dir / SELECTION_CAUSES_FILE).open("w+") as fp:
                 json.dump({"*": [SelectionCause.SELECTION_FAILURE.value]}, fp)
 
@@ -430,8 +430,8 @@ def syscalls(
             to_revision=opts.to_revision,
         )
 
-        (opts.output / INCLUDED_TESTS_FILE).write_text("\n".join(included_tests))
-        (opts.output / EXCLUDED_TESTS_FILE).write_text("\n".join(excluded_tests))
+        (opts.output / INCLUDED_TESTS_FILE).write_text("\n".join(included_tests), encoding="utf-8")
+        (opts.output / EXCLUDED_TESTS_FILE).write_text("\n".join(excluded_tests), encoding="utf-8")
         with (opts.output / SELECTION_CAUSES_FILE).open("w+") as fp:
             json.dump(selection_causes, fp)
 
@@ -441,7 +441,7 @@ def syscalls(
 
     except Exception as e:
         logging.error(f"Error occurred in RTS, falling back to retest-all: {e}")
-        (opts.output / INCLUDED_TESTS_FILE).write_text("*")
-        (opts.output / EXCLUDED_TESTS_FILE).write_text("")
+        (opts.output / INCLUDED_TESTS_FILE).write_text("*", encoding="utf-8")
+        (opts.output / EXCLUDED_TESTS_FILE).write_text("", encoding="utf-8")
         with (opts.output / SELECTION_CAUSES_FILE).open("w+") as fp:
             json.dump({"*": [SelectionCause.SELECTION_FAILURE.value]}, fp)
