@@ -1,5 +1,7 @@
 # BinaryRTS
 
+![CI](https://github.com/tum-i4/binary-rts/actions/workflows/build.yml/badge.svg)
+
 BinaryRTS is a research tool for regression test selection (RTS) based on dynamic binary instrumentation.
 A sample project and instructions on how to use BinaryRTS can be found [here](./sample).
 
