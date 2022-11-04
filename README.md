@@ -1,6 +1,6 @@
 # BinaryRTS
 
-BinaryRTS is an RTS tool based on dynamic binary instrumentation.
+BinaryRTS is a research tool for regression test selection (RTS) based on dynamic binary instrumentation.
 A sample project and instructions on how to use BinaryRTS can be found [here](./sample).
 
 ## Structure
@@ -55,3 +55,8 @@ $ docker run -v $(pwd):/binary-rts -it binaryrts:1.0 bash
 ```
 
 Then, you can run the `cmake` commands from above inside the `bash` session to build BinaryRTS.
+
+## Disclaimer
+
+BinaryRTS is still under active development (mainly by Daniel Elsner) and we expect changes and improvements while collecting experience during the operation of BinaryRTS.
+Since this repository is the public version of an internal repository, updates will be pushed regularly, but not continuously.
