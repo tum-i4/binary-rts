@@ -4,7 +4,7 @@ title: >-
 message: >-
   Please cite this software using these metadata.
 type: dataset
-authors: &authors
+authors:
   - given-names: Daniel
     family-names: Elsner
     email: daniel.elsner@tum.de
@@ -43,10 +43,11 @@ authors: &authors
   - given-names: Silke
     family-names: Reimer
 repository-code: "https://github.com/tum-i4/binary-rts"
-keywords: &keywords
+keywords:
   - regression tests
 preferred-citation:
-  keywords: *keywords
+  keywords:
+    - regression tests
   status: advance-online
   title: "BinaryRTS: Cross-language Regression Test Selection for C++ Binaries in CI"
   year: 2023
@@ -61,5 +62,42 @@ preferred-citation:
     website: https://conf.researchr.org/home/icst-2023
   collection-type: proceedings
   collection-title: "Proceedings of the 16th IEEE International Conference on Software Testing, Verification and Validation"
-  authors: *authors
+  authors:
+    - given-names: Daniel
+      family-names: Elsner
+      email: daniel.elsner@tum.de
+      affiliation: Technical University of Munich (TUM)
+      city: Munich
+      country: DE
+      website: https://www.cs.cit.tum.de/sse/elsner/
+    - given-names: Severin
+      family-names: Kacianka
+      email: severin.kacianka@tum.de
+      affiliation: Technical University of Munich (TUM)
+      orcid: https://orcid.org/0000-0002-2546-3031
+      city: Munich
+      country: DE
+      website: https://www.cs.cit.tum.de/sse/kacianka/
+    - given-names: Stephan
+      family-names: Lipp
+      email: stephan.lipp@tum.de
+      affiliation: Technical University of Munich (TUM)
+      orcid: https://orcid.org/0000-0002-2546-3031
+      city: Munich
+      country: DE
+      website: https://www.cs.cit.tum.de/sse/lipp/
+    - given-names: Alexander
+      family-names: Pretschner
+      email: alexander.pretschner@tum.de
+      affiliation: Technical University of Munich
+      orcid: "https://orcid.org/0000-0002-5573-1201"
+      city: Munich
+      country: DE
+      website: https://www.cs.cit.tum.de/en/sse/people/alexander-pretschner/
+    - given-names: Axel
+      family-names: Habermann
+    - given-names: Maria
+      family-names: Graber
+    - given-names: Silke
+      family-names: Reimer
   type: conference-paper
