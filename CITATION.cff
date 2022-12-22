@@ -61,7 +61,7 @@ preferred-citation:
     date-end: 2023-04-20
     website: https://conf.researchr.org/home/icst-2023
   collection-type: proceedings
-  collection-title: "Proceedings of the 16th IEEE International Conference on Software Testing, Verification and Validation"
+  collection-title: "Proceedings of the 16th IEEE International Conference on Software Testing, Verification and Validation (ICST)"
   authors:
     - given-names: Daniel
       family-names: Elsner
