@@ -72,7 +72,8 @@ void DumpCoverage(const char *dumpId) {
     }
 
 void BinaryRTSTestListener::TestProgramStart() {
-    DumpCoverage("BEFORE_PROGRAM_START");
+    // To ignore coverage before the test program, simply dump once here. 
+    // DumpCoverage("BEFORE_PROGRAM_START");
 }
 
 void BinaryRTSTestListener::TestSuiteStart(const std::string &testSuiteIdentifier) {
