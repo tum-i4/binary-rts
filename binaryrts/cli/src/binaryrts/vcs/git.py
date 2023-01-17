@@ -32,12 +32,14 @@ class GitClient:
     def __init__(
         self,
         root: Path,
+        use_cache: bool = True,
     ) -> None:
         if not check_executable_exists("git"):
             raise Exception("Cannot find git executable.")
         self.root = root
         self.git_repo: Repo = Repo(path=root)
         # to reduce latency in slow (big) git repos, we cache results from git commands
+        self.use_cache = use_cache
         self.diff_cache: Dict[str, Changelist] = {}
         self.show_cache: Dict[str, str] = {}
 
@@ -52,7 +54,7 @@ class GitClient:
             else filepath
         ).replace(os.sep, "/")
         git_obj: str = f"{revision}:{valid_filepath}"
-        if git_obj in self.show_cache:
+        if self.use_cache and git_obj in self.show_cache:
             return self.show_cache[git_obj]
         logging.debug(f"Calling git show {git_obj}")
         raw_output: str = (
@@ -62,7 +64,7 @@ class GitClient:
             .encode("utf-8")
             .decode("utf-8-sig")
         )  # fixes unicode encoding issues on Windows with BOM
-        if git_obj not in self.show_cache:
+        if self.use_cache and git_obj not in self.show_cache:
             self.show_cache[git_obj] = raw_output
         return raw_output
 
@@ -103,8 +105,10 @@ class GitClient:
         from_revision: str,
         to_revision: str,
     ) -> Changelist:
-        git_obj: str = f"{from_revision}..{to_revision}"
-        if git_obj in self.diff_cache:
+        # We use the three-dot diff here to figure out the diff between the latest common ancestor and the pull request.
+        # This will make sure to only consider changes made inside a pull request and no changes from the target branch.
+        git_obj: str = f"{from_revision}...{to_revision}"
+        if self.use_cache and git_obj in self.diff_cache:
             return self.diff_cache[git_obj]
         command: List[str] = [
             "git",
@@ -122,7 +126,7 @@ class GitClient:
         ]
         raw_output: str = sb.check_output(command, text=True)
         cl: Changelist = self.parse_diff(diff=raw_output)
-        if git_obj not in self.diff_cache:
+        if self.use_cache and git_obj not in self.diff_cache:
             self.diff_cache[git_obj] = cl
         return cl
 
