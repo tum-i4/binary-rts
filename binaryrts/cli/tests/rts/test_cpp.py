@@ -847,6 +847,7 @@ int Bar::Maximum(int a, int b) {
                 self.assertDictEqual(
                     {
                         f"sample_module{TEST_ID_SEP}FooSuite{TEST_ID_SEP}Max": [
+                            f"src{os.sep}foo.h::::::Max(int,int)",
                             f"src{os.sep}test.cpp::::::TEST_F(FooSuite,Max)"
                         ],
                     },

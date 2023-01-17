@@ -7,7 +7,7 @@ import subprocess as sb
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Pattern
 
 from binaryrts.util.fs import has_ext
 from binaryrts.util.io import slice_file_into_chunks
@@ -109,6 +109,7 @@ class CSourceCodeParser:
         ".hxx",
         ".h++",
     ]
+    C_TOKEN_PATTERN: str = r"[\s\;\*\%\|\^\+\-\/\>\<\,\(\)\!\.\=\?\{\}]"
 
     def __init__(
         self, include_prototypes: bool = False, use_cache: bool = False
@@ -427,15 +428,17 @@ def ctags(file: Path, include_prototypes: bool = False) -> Optional[str]:
 
 
 @dataclass()
-class CallingFunction:
-    path: str
-    name: str
+class NonFunctionalCallSite:
+    path: Path
     line_no: int
+    name: Optional[str] = field(
+        default=None
+    )  # if a name for the call site is available (e.g., a function name)
 
     @classmethod
     def from_cscope(
         cls, line: str, file_relative_to: Optional[Path] = None
-    ) -> "CallingFunction":
+    ) -> "NonFunctionalCallSite":
         line_fragments: List[str] = line.split()
         path, name, line_no = (
             line_fragments[0],
@@ -444,31 +447,229 @@ class CallingFunction:
         )
         return cls(
             path=(
-                Path(path).resolve().relative_to(file_relative_to.resolve()).__str__()
+                Path(path).resolve().relative_to(file_relative_to.resolve())
                 if file_relative_to
-                else path
+                else Path(path)
             ),
-            name=name,
             line_no=line_no,
+            name=name,
         )
 
 
-class FunctionCallAnalyzer:
-    def __init__(self, root_dir: Path) -> None:
+class NonFunctionalCallAnalyzer:
+    def __init__(
+        self,
+        root_dir: Path,
+        use_cscope: bool = False,
+        use_grep: bool = False,
+        use_findstr: bool = False,
+    ) -> None:
         self.root_dir = root_dir
+        self.use_cscope = use_cscope
+        self.use_grep = use_grep
+        self.use_findstr = use_findstr
 
-    def get_calling_functions(
+    def _get_call_sites_from_cscope(
         self, symbol_name: str, file_relative_to: Optional[Path] = None
-    ) -> List[CallingFunction]:
-        calling_functions: List[CallingFunction] = []
+    ) -> List[NonFunctionalCallSite]:
+        call_sites: List[NonFunctionalCallSite] = []
         output: Optional[str] = cscope(symbol_name=symbol_name, root_dir=self.root_dir)
         if output:
-            calling_functions = [
-                CallingFunction.from_cscope(
+            call_sites = [
+                NonFunctionalCallSite.from_cscope(
                     line=line, file_relative_to=file_relative_to
                 )
                 for line in output.splitlines()
             ]
+        return call_sites
+
+    @staticmethod
+    def _parse_call_sites(
+        symbol_name: str, output: str, file_relative_to: Optional[Path] = None
+    ) -> List[NonFunctionalCallSite]:
+        call_sites: List[NonFunctionalCallSite] = []
+        try:
+            # we filter the call sites to only those, that do not subsume the queried symbol name
+            pattern: Pattern = re.compile(
+                rf"{CSourceCodeParser.C_TOKEN_PATTERN}{symbol_name}{CSourceCodeParser.C_TOKEN_PATTERN}"
+            )
+            for line in output.splitlines():
+                parts = line.split(":")
+                if len(parts) < 3:
+                    continue
+                # we expect the path to be absolute on Windows, including the drive name (e.g., "C:")
+                path_fragment: str = (
+                    ":".join(parts[:2]) if os_is_windows() else parts[0]
+                )
+                line_fragment: str = parts[2] if os_is_windows() else parts[1]
+                filepath: Path = (
+                    Path(path_fragment)
+                    .resolve()
+                    .relative_to(file_relative_to.resolve())
+                    if file_relative_to
+                    else Path(path_fragment).resolve()
+                )
+                line_no: int = int(line_fragment)
+                match: str = (
+                    ":".join(parts[3:]) if os_is_windows() else ":".join(parts[2:])
+                )
+                if (
+                    re.search(pattern, match) is not None
+                    and line_no > 0
+                    and filepath.is_file()
+                ):
+                    call_sites.append(
+                        NonFunctionalCallSite(
+                            path=filepath,
+                            line_no=line_no,
+                        )
+                    )
+        except Exception as e:
+            raise Exception(f"Failed to parse call sites from output {output}: {e}")
+        return call_sites
+
+    def _get_call_sites_from_grep(
+        self, symbol_name: str, file_relative_to: Optional[Path] = None
+    ) -> List[NonFunctionalCallSite]:
+        call_sites: List[NonFunctionalCallSite] = []
+        grep_executable_default: Path = Path("/usr/bin/grep")
+        grep_executable: Optional[str] = check_executable_exists(
+            program=grep_executable_default.resolve().__str__()
+        )
+        if grep_executable:
+            command: List[str] = [
+                f"{grep_executable}",
+                "--recursive",
+                "--with-filename",
+                "--line-number",
+                "--binary-files=without-match",
+                "--no-messages",
+                "--fixed-strings",
+            ]
+            command += [
+                f'--include="*{ext}"' for ext in CSourceCodeParser.C_LIKE_EXTENSIONS
+            ]
+            command += [f'"{symbol_name}"', self.root_dir.absolute().__str__()]
+            process: sb.CompletedProcess = sb.run(
+                " ".join(command),
+                text=True,
+                shell=True,
+                capture_output=True,
+                timeout=60 * 5,  # wait max. 5 minutes for results
+            )
+            if process.returncode != 0:
+                raise Exception(
+                    f"Failed to run grep command {command}: {process.stdout} {process.stderr}"
+                )
+            else:
+                call_sites = self._parse_call_sites(
+                    symbol_name=symbol_name,
+                    output=process.stdout,
+                    file_relative_to=file_relative_to,
+                )
+        return call_sites
+
+    def _get_call_sites_from_findstr(
+        self, symbol_name: str, file_relative_to: Optional[Path] = None
+    ) -> List[NonFunctionalCallSite]:
+        calling_functions: List[NonFunctionalCallSite] = []
+
+        # collect all C-like files
+        file_paths: List[str] = []
+        for root, dirs, files in os.walk(self.root_dir.absolute()):
+            for file in files:
+                filepath: str = os.path.join(root, file)
+                if CSourceCodeParser.is_c_file(Path(file)):
+                    file_paths.append(f"{filepath}")
+
+        if len(file_paths) > 0:
+            # invoke findstr
+            input_file: Path = Path("findstr.log").absolute()
+            input_file.write_text("\n".join(file_paths))
+
+            findstr_executable_default: Path = Path(r"C:\Windows\System32\findstr.exe")
+            findstr_executable: Optional[str] = check_executable_exists(
+                program=findstr_executable_default.resolve().__str__()
+            )
+            if findstr_executable:
+                command: str = " ".join(
+                    [
+                        f'"{findstr_executable}"',
+                        f"/f:{input_file.__str__()}",
+                        "/p",  # skip non-printable files (e.g. binaries)
+                        "/n",  # print every matching line number
+                        "/l",  # no regex, but literal matches
+                        f'"{symbol_name}"',
+                    ]
+                )
+                process: sb.CompletedProcess = sb.run(
+                    command,
+                    text=True,
+                    shell=True,
+                    capture_output=True,
+                    timeout=60 * 5,  # wait max. 5 minutes for results
+                )
+                if process.returncode != 0:
+                    raise Exception(
+                        f"Failed to run findstr command {command}: {process.stdout} {process.stderr}"
+                    )
+                else:
+                    calling_functions = self._parse_call_sites(
+                        symbol_name=symbol_name,
+                        output=process.stdout,
+                        file_relative_to=file_relative_to,
+                    )
+
+            if input_file.exists():
+                input_file.unlink()
+
+        return calling_functions
+
+    def get_call_sites(
+        self, symbol_name: str, file_relative_to: Optional[Path] = None
+    ) -> List[NonFunctionalCallSite]:
+        calling_functions: List[NonFunctionalCallSite] = []
+        if self.use_cscope:
+            calling_functions = self._get_call_sites_from_cscope(
+                symbol_name=symbol_name, file_relative_to=file_relative_to
+            )
+        elif self.use_findstr:
+            calling_functions = self._get_call_sites_from_findstr(
+                symbol_name=symbol_name, file_relative_to=file_relative_to
+            )
+        elif self.use_grep:
+            calling_functions = self._get_call_sites_from_grep(
+                symbol_name=symbol_name, file_relative_to=file_relative_to
+            )
+        else:
+            pattern: Pattern = re.compile(
+                rf"{CSourceCodeParser.C_TOKEN_PATTERN}{symbol_name}{CSourceCodeParser.C_TOKEN_PATTERN}"
+            )
+            for root, dirs, files in os.walk(self.root_dir.absolute()):
+                for file in files:
+                    filepath: Path = Path(root) / file
+                    if CSourceCodeParser.is_c_file(filepath):
+                        try:
+                            with filepath.open("r") as fp:
+                                for idx, line in enumerate(fp):
+                                    if re.search(pattern, line) is not None:
+                                        filepath = (
+                                            filepath.resolve().relative_to(
+                                                file_relative_to.resolve()
+                                            )
+                                            if file_relative_to
+                                            else filepath.resolve()
+                                        )
+                                        calling_functions.append(
+                                            NonFunctionalCallSite(
+                                                path=filepath, line_no=idx + 1
+                                            )
+                                        )
+                        except Exception as e:
+                            logging.error(
+                                f"Could not search for call sites in {filepath}: {e}"
+                            )
+
         return calling_functions
 
 

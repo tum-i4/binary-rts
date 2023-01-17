@@ -188,6 +188,13 @@ def cpp(
         "Effectively, if non-functional changes to matching files occur, "
         "all functions inside these files will be marked as affected.",
     ),
+    use_cscope: bool = typer.Option(
+        False,
+        "--cscope",
+        help="Whether to use cscope for non-functional analysis or naive text-based lookup."
+        "More efficient lookup using grep [Linux] or findstr [Windows] are experimental "
+        "and need to be manually enabled in the source code.",
+    ),
     evaluation: bool = typer.Option(
         False,
         "--evaluation",
@@ -272,6 +279,7 @@ def cpp(
                     generated_code_exts=generated_code_exts,
                     retest_all_regex=retest_all_regex,
                     file_level_regex=file_level_regex,
+                    use_cscope=use_cscope,
                 )
 
             logging.info(
@@ -282,8 +290,12 @@ def cpp(
                 to_revision=opts.to_revision,
             )
 
-            (output_dir / INCLUDED_TESTS_FILE).write_text("\n".join(included_tests), encoding="utf-8")
-            (output_dir / EXCLUDED_TESTS_FILE).write_text("\n".join(excluded_tests), encoding="utf-8")
+            (output_dir / INCLUDED_TESTS_FILE).write_text(
+                "\n".join(included_tests), encoding="utf-8"
+            )
+            (output_dir / EXCLUDED_TESTS_FILE).write_text(
+                "\n".join(excluded_tests), encoding="utf-8"
+            )
             with (output_dir / SELECTION_CAUSES_FILE).open("w+") as fp:
                 json.dump(selection_causes, fp)
         except Exception as e:
@@ -316,6 +328,7 @@ def cpp(
                 virtual_analysis=False,
                 non_functional_analysis=True,
                 non_functional_retest_all=False,
+                non_functional_analysis_depth=non_functional_analysis_depth,
             ),
             RTSConfiguration(
                 name=f"{'java' if java else 'cpp'}-func-macro-retest-all",
@@ -361,6 +374,7 @@ def cpp(
                 virtual_analysis=True,
                 non_functional_analysis=True,
                 non_functional_retest_all=False,
+                non_functional_analysis_depth=non_functional_analysis_depth,
             ),
             RTSConfiguration(
                 name=f"{'java' if java else 'cpp'}-file",
@@ -430,8 +444,12 @@ def syscalls(
             to_revision=opts.to_revision,
         )
 
-        (opts.output / INCLUDED_TESTS_FILE).write_text("\n".join(included_tests), encoding="utf-8")
-        (opts.output / EXCLUDED_TESTS_FILE).write_text("\n".join(excluded_tests), encoding="utf-8")
+        (opts.output / INCLUDED_TESTS_FILE).write_text(
+            "\n".join(included_tests), encoding="utf-8"
+        )
+        (opts.output / EXCLUDED_TESTS_FILE).write_text(
+            "\n".join(excluded_tests), encoding="utf-8"
+        )
         with (opts.output / SELECTION_CAUSES_FILE).open("w+") as fp:
             json.dump(selection_causes, fp)
 

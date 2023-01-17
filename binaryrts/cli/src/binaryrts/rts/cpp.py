@@ -12,8 +12,8 @@ from binaryrts.parser.coverage import (
 from binaryrts.parser.sourcecode import (
     FunctionDefinition,
     CSourceCodeParser,
-    FunctionCallAnalyzer,
-    CallingFunction,
+    NonFunctionalCallAnalyzer,
+    NonFunctionalCallSite,
 )
 from binaryrts.rts.base import RTSAlgo, SelectionCause
 from binaryrts.rts.diff import CodeDiffAnalyzer
@@ -160,6 +160,7 @@ class CppFunctionLevelRTS(CppBaseRTS):
         virtual_analysis: bool = False,
         scope_analysis: bool = False,
         overload_analysis: bool = False,
+        use_cscope: bool = False,
         file_regex: str = ".*",
         generated_code_regex: Optional[str] = None,
         generated_code_exts: Optional[List[str]] = None,
@@ -183,6 +184,7 @@ class CppFunctionLevelRTS(CppBaseRTS):
         self.overload_analysis = overload_analysis
         self.virtual_analysis = virtual_analysis
         self.file_level_regex = file_level_regex
+        self.use_cscope = use_cscope
 
     def _get_ids_of_affected_functions_for_file(
         self, affected_functions: List[FunctionDefinition], file: Optional[Path] = None
@@ -212,16 +214,18 @@ class CppFunctionLevelRTS(CppBaseRTS):
     def _get_ids_of_affected_function_for_non_functional(
         self, symbol_name: str, root_dir: Path, file_relative_to: Optional[Path] = None
     ) -> Set[int]:
-        call_analyzer: FunctionCallAnalyzer = FunctionCallAnalyzer(root_dir=root_dir)
-        calling_functions: List[CallingFunction] = call_analyzer.get_calling_functions(
+        call_analyzer: NonFunctionalCallAnalyzer = NonFunctionalCallAnalyzer(
+            root_dir=root_dir, use_cscope=self.use_cscope
+        )
+        call_sites: List[NonFunctionalCallSite] = call_analyzer.get_call_sites(
             symbol_name=symbol_name, file_relative_to=file_relative_to
         )
         affected_function_ids: Set[int] = set()
-        for calling_function in calling_functions:
+        for site in call_sites:
             funcs: Optional[
                 List[CoveredFunction]
             ] = self.function_lookup_table.find_functions_by_line(
-                file=Path(calling_function.path), line=calling_function.line_no
+                file=site.path, line=site.line_no
             )
             if funcs is not None and len(funcs) > 0:
                 affected_function_ids |= {func.identifier for func in funcs}
@@ -426,8 +430,10 @@ class CppFunctionLevelRTS(CppBaseRTS):
 
                                 # we only want to mark functions as affected once
                                 if is_first_entity and self.file_level_regex:
-                                    affected_function_ids |= self._mark_all_functions_as_affected(
-                                        change_item=change_item
+                                    affected_function_ids |= (
+                                        self._mark_all_functions_as_affected(
+                                            change_item=change_item
+                                        )
                                     )
                                 is_first_entity = False
 
