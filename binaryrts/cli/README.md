@@ -6,10 +6,10 @@ management.
 
 ## Prerequisites
 
-The CLI uses [`ctags`](https://github.com/universal-ctags/ctags) and [`cscope`](http://cscope.sourceforge.net/) to
+The CLI uses [`ctags`](https://github.com/universal-ctags/ctags) and [`cscope`](http://cscope.sourceforge.net/) (optional) to
 analyze C/C++ source files.
 For Windows, the binaries should be put into [`src/binaryrts/bin`](./src/binaryrts/bin).
-The `cscope` binary is already available there, whereas an up-to-date pre-built `ctags` binary can be
+The `cscope` binary (optional) is already available there, whereas an up-to-date pre-built `ctags` binary can be
 downloaded [here](https://github.com/universal-ctags/ctags-win32).
 To use the BinaryRTS CLI on Linux or macOS, install them as follows:
 
@@ -27,7 +27,7 @@ $ ./configure --prefix=/where/you/want # defaults to /usr/local
 $ make
 $ make install # may require extra privileges depending on where to install
 
-# cscope
+# cscope (optional)
 # macOS
 $ brew install cscope
 
