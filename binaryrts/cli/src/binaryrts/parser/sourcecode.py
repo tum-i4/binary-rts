@@ -109,7 +109,7 @@ class CSourceCodeParser:
         ".hxx",
         ".h++",
     ]
-    C_TOKEN_PATTERN: str = r"[\s\;\*\%\|\^\+\-\/\>\<\,\(\)\!\.\=\?\{\}]"
+    C_TOKEN_PATTERN: str = r"[\s\;\*\%\|\&\~\^\+\-\/\>\<\,\(\)\!\.\=\?\{\}]"
 
     def __init__(
         self, include_prototypes: bool = False, use_cache: bool = False
@@ -197,6 +197,7 @@ class CSourceCodeParser:
                         or ctags_output_line.kind == "member"
                         or ctags_output_line.kind == "variable"
                         or ctags_output_line.kind == "enumerator"
+                        or ctags_output_line.kind == "externvar"
                     ):
                         properties: str = ctags_output_line.kind
                         if ctags_output_line.properties is not None:
