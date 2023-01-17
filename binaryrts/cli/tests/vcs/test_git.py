@@ -138,6 +138,73 @@ class GitClientTestCase(unittest.TestCase):
 
                 self.assertEqual(changelist, expected_changelist)
 
+    def test_diff_rebase(self):
+        with temp_repo() as (remote_repo_path, remote_repo):
+            with temp_clone() as (local_repo_path, local_repo):
+                # set up git client
+                client: GitClient = GitClient(root=local_repo_path, use_cache=False)
+
+                # create, commit and push file
+                active_branch: str = client.git_repo.active_branch.name
+                first_file: Path = Path("new_file_1")
+                second_file: Path = Path("new_file_2")
+                first_file.touch()
+                second_file.touch()
+                client.git_repo.git.add(".")
+                client.git_repo.git.commit(message="Commit main")
+                client.git_repo.remote().push()
+
+                # add modifications on feature branch
+                client.git_repo.git.checkout(b="feature")
+                first_file.write_text("new data")
+                client.git_repo.git.add(".")
+                client.git_repo.git.commit(message="Commit feature")
+
+                # switch back to main and add modifications as well
+                client.git_repo.git.checkout(active_branch)
+                second_file.write_text("new data 2")
+                client.git_repo.git.add(".")
+                client.git_repo.git.commit(message="Commit main 2")
+                client.git_repo.remote().push()
+
+                # set HEAD back to feature branch
+                client.git_repo.git.checkout("feature")
+
+                # set up expected changelist
+                expected_changelist: Changelist = Changelist(
+                    items=[
+                        ChangelistItem(
+                            filepath=first_file,
+                            action=ChangelistItemAction.MODIFIED,
+                        ),
+                    ]
+                )
+
+                changelist: Changelist = client.get_diff(
+                    from_revision=f"origin/{active_branch}", to_revision="HEAD"
+                )
+                self.assertEqual(expected_changelist, changelist)
+
+                # create feature-2 at same commit as feature
+                client.git_repo.git.checkout(b="feature-2")
+                client.git_repo.git.checkout("feature")
+
+                # merge main into feature
+                client.git_repo.git.merge(active_branch)
+                changelist: Changelist = client.get_diff(
+                    from_revision=f"origin/{active_branch}", to_revision="HEAD"
+                )
+                self.assertEqual(expected_changelist, changelist)
+
+                # move back to original feature branch (feature-2)
+                client.git_repo.git.checkout("feature-2")
+                client.git_repo.git.rebase(active_branch)
+
+                changelist: Changelist = client.get_diff(
+                    from_revision=f"origin/{active_branch}", to_revision="HEAD"
+                )
+                self.assertEqual(expected_changelist, changelist)
+
     def test_get_file_content_at_commit(self):
         with temp_repo() as (remote_repo_path, remote_repo):
             with temp_clone() as (local_repo_path, local_repo):
