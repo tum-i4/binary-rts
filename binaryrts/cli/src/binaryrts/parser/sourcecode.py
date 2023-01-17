@@ -198,6 +198,7 @@ class CSourceCodeParser:
                         or ctags_output_line.kind == "variable"
                         or ctags_output_line.kind == "enumerator"
                         or ctags_output_line.kind == "externvar"
+                        or (ctags_output_line.kind == "function" and ctags_output_line.is_const_expr)
                     ):
                         properties: str = ctags_output_line.kind
                         if ctags_output_line.properties is not None:
@@ -285,6 +286,10 @@ class CTagsJsonOutputLine:
     inherits: Optional[str] = field(default=None)
     captures: Optional[str] = field(default=None)
     specialization: Optional[str] = field(default=None)
+
+    @property
+    def is_const_expr(self) -> bool:
+        return self.properties is not None and ('constexpr' in self.properties or 'consteval' in self.properties)
 
     def to_type_def(self, file: Optional[Path] = None) -> Optional[TypeDefinition]:
         type_def: Optional[TypeDefinition] = None
