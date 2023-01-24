@@ -156,13 +156,13 @@ class GitClientTestCase(unittest.TestCase):
 
                 # add modifications on feature branch
                 client.git_repo.git.checkout(b="feature")
-                first_file.write_text("new dätä 🎉")
+                first_file.write_text("new dätä 🎉", encoding="utf-8")
                 client.git_repo.git.add(".")
                 client.git_repo.git.commit(message="Commit feature")
 
                 # switch back to main and add modifications as well
                 client.git_repo.git.checkout(active_branch)
-                second_file.write_text("new dätä 2 🎉")
+                second_file.write_text("new dätä 2 🎉", encoding="utf-8")
                 client.git_repo.git.add(".")
                 client.git_repo.git.commit(message="Commit main 2")
                 client.git_repo.remote().push()
@@ -213,14 +213,14 @@ class GitClientTestCase(unittest.TestCase):
 
                 # create and commit file
                 first_file = Path("new_file.txt")
-                first_file.write_text("Hello 🎉")
+                first_file.write_text("Hello 🎉", encoding="utf-8")
 
                 client.git_repo.git.add(".")
                 client.git_repo.git.commit(message="Commit 1")
                 client.git_repo.remote().push()
 
                 self.assertTrue(first_file.exists())
-                self.assertEqual("Hello 🎉", first_file.read_text())
+                self.assertEqual("Hello 🎉", first_file.read_text(encoding="utf-8"))
                 first_file.unlink()
                 self.assertFalse(first_file.exists())
 
