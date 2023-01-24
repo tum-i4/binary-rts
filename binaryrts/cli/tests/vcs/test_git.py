@@ -156,13 +156,13 @@ class GitClientTestCase(unittest.TestCase):
 
                 # add modifications on feature branch
                 client.git_repo.git.checkout(b="feature")
-                first_file.write_text("new data")
+                first_file.write_text("new dätä 🎉")
                 client.git_repo.git.add(".")
                 client.git_repo.git.commit(message="Commit feature")
 
                 # switch back to main and add modifications as well
                 client.git_repo.git.checkout(active_branch)
-                second_file.write_text("new data 2")
+                second_file.write_text("new dätä 2 🎉")
                 client.git_repo.git.add(".")
                 client.git_repo.git.commit(message="Commit main 2")
                 client.git_repo.remote().push()
@@ -213,21 +213,21 @@ class GitClientTestCase(unittest.TestCase):
 
                 # create and commit file
                 first_file = Path("new_file.txt")
-                first_file.write_text("Hello")
+                first_file.write_text("Hello 🎉")
 
                 client.git_repo.git.add(".")
                 client.git_repo.git.commit(message="Commit 1")
                 client.git_repo.remote().push()
 
                 self.assertTrue(first_file.exists())
-                self.assertEqual("Hello", first_file.read_text())
+                self.assertEqual("Hello 🎉", first_file.read_text())
                 first_file.unlink()
                 self.assertFalse(first_file.exists())
 
                 previous_file_content: str = client.get_file_content_at_revision(
                     revision="HEAD", filepath=first_file
                 )
-                self.assertEqual("Hello", previous_file_content)
+                self.assertEqual("Hello 🎉", previous_file_content)
 
                 client.git_repo.git.add(".")
                 client.git_repo.git.commit(message="Commit 2")
@@ -237,7 +237,7 @@ class GitClientTestCase(unittest.TestCase):
                 previous_file_content: str = client.get_file_content_at_revision(
                     revision="HEAD~1", filepath=first_file
                 )
-                self.assertEqual("Hello", previous_file_content)
+                self.assertEqual("Hello 🎉", previous_file_content)
 
 
 if __name__ == "__main__":
