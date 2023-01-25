@@ -59,7 +59,7 @@ class GitClient:
         logging.debug(f"Calling git show {git_obj}")
         raw_output: str = (
             sb.check_output(
-                ["git", "-C", self.root.__str__(), "show", git_obj], text=True
+                ["git", "-C", self.root.__str__(), "show", git_obj], text=True, encoding="utf-8", errors="replace"
             )
             .encode("utf-8")
             .decode("utf-8-sig")
@@ -124,7 +124,7 @@ class GitClient:
             "--ignore-all-space",
             git_obj,
         ]
-        raw_output: str = sb.check_output(command, text=True)
+        raw_output: str = sb.check_output(command, text=True, encoding="utf-8", errors="replace")
         cl: Changelist = self.parse_diff(diff=raw_output)
         if self.use_cache and git_obj not in self.diff_cache:
             self.diff_cache[git_obj] = cl
@@ -132,7 +132,7 @@ class GitClient:
 
     def get_status(self) -> Changelist:
         raw_output: str = sb.check_output(
-            ["git", "-C", self.root.__str__(), "status", "--porcelain"], text=True
+            ["git", "-C", self.root.__str__(), "status", "--porcelain"], text=True, encoding="utf-8", errors="replace"
         )
         changes: List[List[str]] = list(
             map(
