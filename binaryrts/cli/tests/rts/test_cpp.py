@@ -282,6 +282,116 @@ class CppFunctionLevelRTSTestCase(unittest.TestCase):
                     selection_causes,
                 )
 
+    def test_selection_with_includes(self):
+        with temp_repo() as (remote_repo_path, remote_repo):
+            with temp_clone() as (local_repo_path, local_repo):
+                git_client: GitClient = GitClient.from_repo(git_repo=local_repo)
+
+                (
+                    function_lookup_table,
+                    test_function_traces,
+                ) = setup_repo_init_lookup_traces(git_client=git_client)
+
+                # set up RTS algo
+                algo: CppFunctionLevelRTS = CppFunctionLevelRTS(
+                    git_client=git_client,
+                    function_lookup_table=function_lookup_table,
+                    test_function_traces=test_function_traces,
+                    output_dir=git_client.root,
+                    includes_regex=".*inc.*",
+                )
+
+                # checkout feature branch
+                target_branch: str = git_client.git_repo.active_branch.name
+                git_client.git_repo.git.checkout(b="feature/xxx")
+
+                file = Path("src") / "foo.h"
+                file.write_text(
+                    file.read_text().replace(
+                        "return a > b", "int c = 0; \nreturn a > b"
+                    )
+                )
+
+                git_client.git_repo.git.add(".")
+                git_client.git_repo.git.commit(
+                    message="Change Foo::Maximum in not included file"
+                )
+
+                included_tests, excluded_tests, selection_causes = algo.select_tests(
+                    from_revision=target_branch, to_revision="HEAD"
+                )
+                self.assertSetEqual(
+                    set(),
+                    included_tests,
+                )
+                self.assertSetEqual(
+                    {
+                        f"sample_module{TEST_ID_SEP}FooSuite{TEST_ID_SEP}FooMax",
+                        f"sample_module{TEST_ID_SEP}FooSuite{TEST_ID_SEP}Max",
+                        f"sample_module{TEST_ID_SEP}FooSuite{TEST_ID_SEP}MaxMacro",
+                    },
+                    excluded_tests,
+                )
+                self.assertDictEqual(
+                    dict(),
+                    selection_causes,
+                )
+
+    def test_selection_with_excludes(self):
+        with temp_repo() as (remote_repo_path, remote_repo):
+            with temp_clone() as (local_repo_path, local_repo):
+                git_client: GitClient = GitClient.from_repo(git_repo=local_repo)
+
+                (
+                    function_lookup_table,
+                    test_function_traces,
+                ) = setup_repo_init_lookup_traces(git_client=git_client)
+
+                # set up RTS algo
+                algo: CppFunctionLevelRTS = CppFunctionLevelRTS(
+                    git_client=git_client,
+                    function_lookup_table=function_lookup_table,
+                    test_function_traces=test_function_traces,
+                    output_dir=git_client.root,
+                    excludes_regex=".*",
+                )
+
+                # checkout feature branch
+                target_branch: str = git_client.git_repo.active_branch.name
+                git_client.git_repo.git.checkout(b="feature/xxx")
+
+                file = Path("src") / "foo.h"
+                file.write_text(
+                    file.read_text().replace(
+                        "return a > b", "int c = 0; \nreturn a > b"
+                    )
+                )
+
+                git_client.git_repo.git.add(".")
+                git_client.git_repo.git.commit(
+                    message="Change Foo::Maximum in excluded file"
+                )
+
+                included_tests, excluded_tests, selection_causes = algo.select_tests(
+                    from_revision=target_branch, to_revision="HEAD"
+                )
+                self.assertSetEqual(
+                    set(),
+                    included_tests,
+                )
+                self.assertSetEqual(
+                    {
+                        f"sample_module{TEST_ID_SEP}FooSuite{TEST_ID_SEP}FooMax",
+                        f"sample_module{TEST_ID_SEP}FooSuite{TEST_ID_SEP}Max",
+                        f"sample_module{TEST_ID_SEP}FooSuite{TEST_ID_SEP}MaxMacro",
+                    },
+                    excluded_tests,
+                )
+                self.assertDictEqual(
+                    dict(),
+                    selection_causes,
+                )
+
     def test_selection_add_file(self):
         with temp_repo() as (remote_repo_path, remote_repo):
             with temp_clone() as (local_repo_path, local_repo):
@@ -848,7 +958,7 @@ int Bar::Maximum(int a, int b) {
                     {
                         f"sample_module{TEST_ID_SEP}FooSuite{TEST_ID_SEP}Max": [
                             f"src{os.sep}foo.h::::::Max(int,int)",
-                            f"src{os.sep}test.cpp::::::TEST_F(FooSuite,Max)"
+                            f"src{os.sep}test.cpp::::::TEST_F(FooSuite,Max)",
                         ],
                     },
                     selection_causes,
