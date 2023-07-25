@@ -91,6 +91,14 @@ typedef struct _covlib_options_t {
     bool runtime_dump;
 
     /**
+     * By default, only the start offset of BBs are recorded.
+     * This option will cause the BB sizes to be recorded as well, resulting in a slightly different output format
+     * (BB_start, BB_size), but only if -text_dump is used.
+     * Note: This output format is only compatible with the visualizer project, not with the default BinaryRTS resolver.
+     */
+    bool dump_bb_size;
+
+    /**
      * By default, covered BB offsets are dumped in binary format. This option enables a less efficient text dump. If symbol resolving is activated, this option gets automatically enabled.
      */
     bool text_dump;
