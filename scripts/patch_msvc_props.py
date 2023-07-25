@@ -73,6 +73,11 @@ def parse_arguments() -> argparse.Namespace:
         help="Additional compiler options passed to ClCompile (might be necessary to make BinaryRTS work, "
              "e.g., prevent inlining).",
     )
+    parser.add_argument(
+        "--linker-opts",
+        default="/OPT:NOREF,NOICF",  # by default, we only disable COMDAT elimination
+        help="Additional linker options passed to Link.",
+    )
     return parser.parse_args()
 
 
@@ -119,6 +124,10 @@ def main():
                         prop.text = f"{prop.text} {args.compiler_opts}"
                     if "InlineFunctionExpansion" in prop.tag and "/Ob0" in args.compiler_opts:
                         cl_compile_element.remove(prop)
+                    if "FunctionLevelLinking" in prop.tag and "/Ob0" in args.compiler_opts:
+                        cl_compile_element.remove(prop)
+                    if "Optimization" in prop.tag and "/Od" in args.compiler_opts:
+                        cl_compile_element.remove(prop)
                 if not compiler_opts_exists:
                     new_node: ET.Element = ET.Element("AdditionalOptions")
                     new_node.text = f"{args.compiler_opts} %(AdditionalOptions)"
@@ -144,6 +153,19 @@ def main():
                 new_node: ET.Element = ET.Element("AdditionalDependencies")
                 new_node.text = f"{BINARY_RTS_LISTENER_LIB};%(AdditionalDependencies)"
                 link_element.append(new_node)
+                
+            if args.linker_opts and args.linker_opts != "":
+                linker_opts_exists: bool = False
+                for prop in link_element:
+                    if "AdditionalOptions" in prop.tag:
+                        linker_opts_exists = True
+                        prop.text = f"{prop.text} {args.linker_opts}"
+                    if "EnableCOMDATFolding" in prop.tag and "/OPT:NOREF,NOICF" in args.linker_opts:
+                        link_element.remove(prop)
+                if not linker_opts_exists:
+                    new_node: ET.Element = ET.Element("AdditionalOptions")
+                    new_node.text = f"{args.linker_opts} %(AdditionalOptions)"
+                    link_element.append(new_node)
 
         tree.write(prop_file, encoding='utf-8', xml_declaration=True)
 
