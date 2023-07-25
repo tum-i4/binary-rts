@@ -13,7 +13,6 @@ from binaryrts.parser.sourcecode import (
 )
 from binaryrts.util import dict_equals
 from binaryrts.util.fs import is_relative_to
-from binaryrts.util.os import os_is_windows
 from binaryrts.util.process import check_executable_exists
 from binaryrts.util.serialization import SerializerMixin
 from binaryrts.util.string import remove_prefix
@@ -451,7 +450,9 @@ class AbstractTestTrace(ABC, SerializerMixin):
                     last_found_affected_module = test_module
                 # Test suite setup
                 elif is_affected and test_case == "*":
-                    last_found_affected_suite = f"{test_module}{TEST_ID_SEP}{test_suite}"
+                    last_found_affected_suite = (
+                        f"{test_module}{TEST_ID_SEP}{test_suite}"
+                    )
                 # Test case that is either
                 # (1) directly affected
                 # (2) affected by global test setup
@@ -847,11 +848,13 @@ class SymbolResolver:
         ext: str,
         file_regex: str,
         symbol_resolver_executable: Path,
+        use_extracted_symbols: bool
     ) -> None:
         self.root = root
         self.ext = ext
         self.file_regex = file_regex
         self.symbol_resolver_executable = symbol_resolver_executable
+        self.use_extracted_symbols = use_extracted_symbols
 
     def resolve_symbols(self) -> bool:
         has_failed: bool = False
@@ -859,15 +862,15 @@ class SymbolResolver:
             program=self.symbol_resolver_executable.resolve().__str__()
         )
         if resolver_executable:
-            command: str = " ".join(
-                [
-                    f'"{resolver_executable}"',  # need the quotes to support paths with spaces
-                    f"-debug",
-                    f'-root "{self.root.resolve()}"',
-                    f"-ext {self.ext}",
-                    f'-regex "{self.file_regex}"',
-                ]
-            )
+            command_parts: List[str] = [
+                f'"{resolver_executable}"',  # need the quotes to support paths with spaces
+                f'-root "{self.root.resolve()}"',
+                f"-ext {self.ext}",
+                f'-regex "{self.file_regex}"',
+            ]
+            if self.use_extracted_symbols:
+                command_parts.append("-extracted")
+            command: str = " ".join(command_parts)
             process: sb.CompletedProcess = sb.run(
                 command,
                 text=True,
@@ -886,6 +889,7 @@ def call_symbol_resolver(
     extension: str,
     file_regex: str,
     symbol_resolver_executable: Path,
+    use_extracted_symbols: bool = True
 ) -> None:
     """
     Use this function with multiprocessing (local functions cannot be pickled, hence, we need a global function).
@@ -896,5 +900,6 @@ def call_symbol_resolver(
         ext=extension,
         file_regex=file_regex,
         symbol_resolver_executable=symbol_resolver_executable,
+        use_extracted_symbols=use_extracted_symbols
     )
     resolver.resolve_symbols()

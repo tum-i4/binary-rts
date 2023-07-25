@@ -29,18 +29,20 @@ class CppBaseRTS(RTSAlgo, ABC):
         test_function_traces: TestFunctionTraces,
         git_client: GitClient,
         output_dir: Path,
-        file_regex: str = ".*",
+        includes_regex: str = ".*",
+        excludes_regex: str = "",
         generated_code_regex: Optional[str] = None,
         generated_code_exts: Optional[List[str]] = None,
         retest_all_regex: Optional[str] = None,
     ) -> None:
         super().__init__(
-            git_client,
-            output_dir,
-            file_regex,
-            generated_code_regex,
-            generated_code_exts,
-            retest_all_regex,
+            git_client=git_client,
+            output_dir=output_dir,
+            includes_regex=includes_regex,
+            excludes_regex=excludes_regex,
+            generated_code_regex=generated_code_regex,
+            generated_code_exts=generated_code_exts,
+            retest_all_regex=retest_all_regex,
         )
         self.function_lookup_table = function_lookup_table
         self.test_function_traces = test_function_traces
@@ -60,8 +62,15 @@ class CppBaseRTS(RTSAlgo, ABC):
         )
 
     def check_file_excluded(self, item: ChangelistItem) -> bool:
-        return not CSourceCodeParser.is_c_file(item.filepath) or not re.match(
-            self.file_regex, item.filepath.__str__()
+        return (
+            not CSourceCodeParser.is_c_file(item.filepath)
+            or not re.match(self.includes_regex, item.filepath.__str__(), re.IGNORECASE)
+            or (
+                self.excludes_regex != ""
+                and re.match(
+                    self.excludes_regex, item.filepath.__str__(), re.IGNORECASE
+                )
+            )
         )
 
 
@@ -72,20 +81,22 @@ class CppFileLevelRTS(CppBaseRTS):
         test_function_traces: TestFunctionTraces,
         git_client: GitClient,
         output_dir: Path,
-        file_regex: str = ".*",
+        includes_regex: str = ".*",
+        excludes_regex: str = "",
         generated_code_regex: Optional[str] = None,
         generated_code_exts: Optional[List[str]] = None,
         retest_all_regex: Optional[str] = None,
     ) -> None:
         super().__init__(
-            function_lookup_table,
-            test_function_traces,
-            git_client,
-            output_dir,
-            file_regex,
-            generated_code_regex,
-            generated_code_exts,
-            retest_all_regex,
+            function_lookup_table=function_lookup_table,
+            test_function_traces=test_function_traces,
+            git_client=git_client,
+            output_dir=output_dir,
+            includes_regex=includes_regex,
+            excludes_regex=excludes_regex,
+            generated_code_regex=generated_code_regex,
+            generated_code_exts=generated_code_exts,
+            retest_all_regex=retest_all_regex,
         )
 
     def select_tests(
@@ -161,21 +172,23 @@ class CppFunctionLevelRTS(CppBaseRTS):
         scope_analysis: bool = False,
         overload_analysis: bool = False,
         use_cscope: bool = False,
-        file_regex: str = ".*",
+        includes_regex: str = ".*",
+        excludes_regex: str = "",
         generated_code_regex: Optional[str] = None,
         generated_code_exts: Optional[List[str]] = None,
         retest_all_regex: Optional[str] = None,
         file_level_regex: Optional[str] = None,
     ) -> None:
         super().__init__(
-            function_lookup_table,
-            test_function_traces,
-            git_client,
-            output_dir,
-            file_regex,
-            generated_code_regex,
-            generated_code_exts,
-            retest_all_regex,
+            function_lookup_table=function_lookup_table,
+            test_function_traces=test_function_traces,
+            git_client=git_client,
+            output_dir=output_dir,
+            includes_regex=includes_regex,
+            excludes_regex=excludes_regex,
+            generated_code_regex=generated_code_regex,
+            generated_code_exts=generated_code_exts,
+            retest_all_regex=retest_all_regex,
         )
         self.non_functional_analysis = non_functional_analysis
         self.non_functional_analysis_depth = non_functional_analysis_depth

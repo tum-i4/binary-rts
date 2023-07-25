@@ -11,14 +11,16 @@ class RTSAlgo(ABC):
         self,
         git_client: GitClient,
         output_dir: Path,
-        file_regex: str = ".*",
+        includes_regex: str = ".*",
+        excludes_regex: str = "",
         generated_code_regex: Optional[str] = None,
         generated_code_exts: Optional[List[str]] = None,
         retest_all_regex: Optional[str] = None,
     ) -> None:
         self.git_client = git_client
         self.output_dir = output_dir
-        self.file_regex = file_regex
+        self.includes_regex = includes_regex
+        self.excludes_regex = excludes_regex
         self.generated_code_regex = generated_code_regex
         self.generated_code_exts = generated_code_exts
         self.retest_all_regex = retest_all_regex

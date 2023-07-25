@@ -17,7 +17,7 @@ jobs:
     strategy:
       matrix:
         python-version: [ 3.9 ]
-        poetry-version: [ 1.1.15 ]
+        poetry-version: [ 1.5.0 ]
         os: [ ubuntu-20.04, windows-2019 ]
 
     runs-on: ${{ matrix.os }}
@@ -82,7 +82,21 @@ jobs:
         echo "unittests.exe" > modules.txt
         build\_deps\dynamorio-src\bin64\drrun.exe -c build\binaryrts\client\Debug\binary_rts_client.dll -modules modules.txt -logdir unittests -runtime_dump -syscalls -- build\sample\tests\Debug\unittests.exe 
         build\binaryrts\resolver\binary_rts_resolver.exe -root unittests -regex ".*sample.*"
-        python -c "from pathlib import Path; assert 'sample\\tests\\testfoo.cpp' in Path('unittests\\1.log').read_text()" 
+        python -c "from pathlib import Path; assert 'sample\\tests\\testfoo.cpp' in Path('unittests\\1.log').read_text()"
+
+    - name: Test BinaryRTS Extractor (Linux)
+      if: ${{ matrix.os == 'ubuntu-20.04' }}
+      run: |
+        build/binaryrts/extractor/binary_rts_extractor -input build/sample/tests/unittests -regex ".*sample.*" -mode symbols
+        cat build/sample/tests/unittests.binaryrts
+        python -c "from pathlib import Path; assert 'sample/tests/testfoo.cpp' in Path('build/sample/tests/unittests.binaryrts').read_text()"
+
+    - name: Test BinaryRTS Extractor (Windows)
+      if: ${{ matrix.os == 'windows-2019' }}
+      run: |
+        build\binaryrts\extractor\binary_rts_extractor.exe -input build\sample\tests\Debug\unittests.exe -regex ".*sample.*" -mode symbols
+        type build\sample\tests\Debug\unittests.exe.binaryrts
+        python -c "from pathlib import Path; assert 'sample\\tests\\testfoo.cpp' in Path('build\\sample\\tests\\Debug\\unittests.exe.binaryrts').read_text()"
     
     - name: Set Poetry version 
       uses: abatilo/actions-poetry@v2

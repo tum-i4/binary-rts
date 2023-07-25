@@ -3,18 +3,18 @@
 #include <string>
 #include <cassert>
 
-#include "resolver.h"
+#include "visualizer.h"
 
 static void
-initOptions(int argc, const char *argv[], ResolverOptions &opts) {
+initOptions(int argc, const char *argv[], VisualizerOptions &opts) {
     std::string token;
 
     /* Default values. */
     opts.ext = ".log";
     opts.regex = "";
     opts.root = ".";
-    opts.resolveSymbols = true;
     opts.debug = false;
+    opts.queryMissingOffsets = false;
 
     for (int i = 1; i < argc; i++) {
         token = argv[i];
@@ -27,31 +27,32 @@ initOptions(int argc, const char *argv[], ResolverOptions &opts) {
         } else if (token == "-root") {
             assert(("Missing root directory", (i + 1) < argc));
             opts.root = argv[++i];
-        } else if (token == "-extracted") {
-            opts.resolveSymbols = false;
         } else if (token == "-debug") {
             opts.debug = true;
+        } else if (token == "-accurate") {
+            opts.queryMissingOffsets = true;
         }
     }
 }
 
 /**
- * The BinaryRTS resolver is a simple program that resolves symbols for offset addresses of covered modules.
+ * The BinaryRTS visualizer is a simple program that resolves symbols for offset addresses of covered modules
+ * and outputs an LCOV coverage report.
  */
 int
 main(int argc, const char *argv[]) {
     setvbuf(stdout, nullptr, _IONBF, 0);
     try {
         dr_standalone_init();
-        ResolverOptions opts;
+        VisualizerOptions opts;
         initOptions(argc, argv, opts);
         std::cout
-                << "Called BinaryRTS symbol resolver with options:\n"
+                << "Called BinaryRTS visualizer with options:\n"
                 << "-ext: " << opts.ext << "\n"
                 << "-regex: " << opts.regex << "\n"
                 << "-root: " << opts.root << std::endl;
-        SymbolResolver resolver{opts};
-        resolver.run();
+        Visualizer visualizer{opts};
+        visualizer.run();
         dr_standalone_exit();
     }
     catch (std::exception &ex) {

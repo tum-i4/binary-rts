@@ -113,6 +113,7 @@ options_init(client_id_t id, int argc, const char *argv[], covlib_options_t *ops
     ops->text_dump = false;
     ops->resolve_symbols = false;
     ops->runtime_dump = false;
+    ops->dump_bb_size = false;
     ops->syscalls = false;
 
     for (i = 1 /*skip client*/; i < argc; i++) {
@@ -130,6 +131,8 @@ options_init(client_id_t id, int argc, const char *argv[], covlib_options_t *ops
             ops->text_dump = true;
         } else if (strcmp(token, "-runtime_dump") == 0)
             ops->runtime_dump = true;
+        else if (strcmp(token, "-dump_bb_size") == 0)
+            ops->dump_bb_size = true;
         else if (strcmp(token, "-syscalls") == 0) {
             ops->syscalls = true;
         } else if (strcmp(token, "-modules") == 0) {

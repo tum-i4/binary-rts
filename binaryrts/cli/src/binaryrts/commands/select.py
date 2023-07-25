@@ -39,7 +39,8 @@ class SelectCommonOptions:
     output: Path
     from_revision: str
     to_revision: str
-    file_regex: str
+    includes_regex: str
+    excludes_regex: str
 
 
 @dataclass
@@ -83,10 +84,15 @@ def select(
         dir_okay=True,
         resolve_path=True,
     ),
-    file_regex: str = typer.Option(
+    includes_regex: str = typer.Option(
         ".*",
-        "--regex",
-        help="Regular expression to include or exclude certain files or directories from selection.",
+        "--includes",
+        help="Regular expression to include certain files or directories from selection.",
+    ),
+    excludes_regex: str = typer.Option(
+        "",
+        "--excludes",
+        help="Regular expression to exclude certain files or directories from selection.",
     ),
 ):
     """
@@ -97,7 +103,8 @@ def select(
         output=output,
         from_revision=from_revision,
         to_revision=to_revision,
-        file_regex=file_regex,
+        includes_regex=includes_regex,
+        excludes_regex=excludes_regex,
     )
     output.mkdir(parents=True, exist_ok=True)
 
@@ -257,7 +264,8 @@ def cpp(
                     function_lookup_table=function_lookup_table,
                     test_function_traces=test_function_traces,
                     output_dir=output_dir,
-                    file_regex=opts.file_regex,
+                    includes_regex=opts.includes_regex,
+                    excludes_regex=opts.excludes_regex,
                     generated_code_regex=generated_code_regex,
                     generated_code_exts=generated_code_exts,
                     retest_all_regex=retest_all_regex,
@@ -272,7 +280,8 @@ def cpp(
                     non_functional_analysis_depth=config.non_functional_analysis_depth,
                     non_functional_retest_all=config.non_functional_retest_all,
                     virtual_analysis=config.virtual_analysis,
-                    file_regex=opts.file_regex,
+                    includes_regex=opts.includes_regex,
+                    excludes_regex=opts.excludes_regex,
                     scope_analysis=config.scope_analysis,
                     overload_analysis=config.overload_analysis,
                     generated_code_regex=generated_code_regex,
@@ -436,7 +445,8 @@ def syscalls(
         git_client=opts.git_client,
         test_file_traces=test_file_traces,
         output_dir=opts.output,
-        file_regex=opts.file_regex,
+        includes_regex=opts.includes_regex,
+        excludes_regex=opts.excludes_regex,
     )
     try:
         included_tests, excluded_tests, selection_causes = rts_algo.select_tests(

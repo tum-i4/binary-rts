@@ -67,7 +67,7 @@
 
 typedef struct _bb_entry_t {
     uint offset;
-    uint hit_count;
+    uint data; // NOTE: by default, this is the hit count of the BB. If we're dumping BB sizes, this will be the BB size.
 } bb_entry_t;
 
 typedef struct _covered_mod_t {
@@ -169,7 +169,7 @@ dump_bb_entry(ptr_uint_t idx, void *entry, void *user_data) {
     bb_entry_t *bb_entry = (bb_entry_t *) entry;
     dump_request_t *request = (dump_request_t *) user_data;
 
-    if (bb_entry->hit_count > 0) {
+    if (bb_entry->data > 0 || options.dump_bb_size) {
         if (request->resolve_symbols) {
             char file[MAXIMUM_PATH];
             char name[MAX_SYM_RESULT];
@@ -180,12 +180,12 @@ dump_bb_entry(ptr_uint_t idx, void *entry, void *user_data) {
                            bb_entry->offset, file, name, line);
             }
         } else if (options.text_dump) {
-            dr_fprintf(request->dump_file, "\t+0x%I64x\n", bb_entry->offset);
+            dr_fprintf(request->dump_file, "\t+0x%I64x\t%u\n", bb_entry->offset, bb_entry->data);
         } else {
             drvector_append(&request->bb_offsets, (void *) (uintptr_t) bb_entry->offset);
         }
         if (request->reset) {
-            bb_entry->hit_count = 0;
+            bb_entry->data = 0;
         }
     }
     return true;
@@ -331,7 +331,7 @@ add_bb_coverage_entry(void *drcontext, coverage_data_t *data, app_pc start, bb_e
         }
         *bb_entry = (bb_entry_t *) dr_global_alloc(sizeof(bb_entry_t));
         (*bb_entry)->offset = offset;
-        (*bb_entry)->hit_count = 0;
+        (*bb_entry)->data = 0;
         hashtable_add(&covered_mod_entry->bb_table, (void *) (ptr_uint_t) offset, (void *) *bb_entry);
         return NEW_BB;
     }
@@ -497,9 +497,14 @@ event_bb_analysis(void *drcontext, void *tag, instrlist_t *bb,
     app_pc start_pc;
     start_pc = dr_fragment_app_pc(tag);
     bb_entry_t *bb_entry = NULL;
-    bb_entry_status_t res = add_bb_coverage_entry(drcontext, global_data, start_pc, &bb_entry);
-    if (bb_entry != NULL)
-        bb_entry->hit_count += 1;
+    add_bb_coverage_entry(drcontext, global_data, start_pc, &bb_entry);
+    if (bb_entry != NULL && !options.dump_bb_size)
+        bb_entry->data += 1;
+    else if (bb_entry != NULL && options.dump_bb_size) {
+        instr_t *end_pc_ins = instrlist_last_app(bb);
+        app_pc end_pc = instr_get_app_pc(end_pc_ins);
+        bb_entry->data = (uint) (end_pc - start_pc);
+    }
 
     return DR_EMIT_DEFAULT;
 }
@@ -546,14 +551,14 @@ event_bb_instrumentation(void *drcontext, void *tag, instrlist_t *bb, instr_t *i
          */
         drreg_reserve_aflags(drcontext, bb, instr);
         instrlist_meta_preinsert(bb, instr,
-                                 INSTR_CREATE_inc(drcontext, OPND_CREATE_ABSMEM(&(bb_entry->hit_count), OPSZ_4)));
+                                 INSTR_CREATE_inc(drcontext, OPND_CREATE_ABSMEM(&(bb_entry->data), OPSZ_4)));
         drreg_unreserve_aflags(drcontext, bb, instr);
 #else
-        dr_insert_clean_call(drcontext, bb, instr, (void*)clean_call, false, 1, OPND_CREATE_INTPTR(&(bb_entry->hit_count)));
+        dr_insert_clean_call(drcontext, bb, instr, (void*)clean_call, false, 1, OPND_CREATE_INTPTR(&(bb_entry->data)));
 #endif
 
         /* Just to be sure, we increment the hit count here once in case our racy increment fails. */
-        bb_entry->hit_count += 1;
+        bb_entry->data += 1;
 
 #ifdef VERBOSE
         NOTIFY(0, "AFTER instrumentation: \n");

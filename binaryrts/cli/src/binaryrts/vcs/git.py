@@ -59,7 +59,7 @@ class GitClient:
         logging.debug(f"Calling git show {git_obj}")
         raw_output: str = (
             sb.check_output(
-                ["git", "-C", self.root.__str__(), "show", git_obj], text=True, encoding="utf-8", errors="replace"
+                ["git", "-P", "-C", self.root.__str__(), "show", git_obj], text=True, encoding="utf-8", errors="replace"
             )
             .encode("utf-8")
             .decode("utf-8-sig")
@@ -112,6 +112,7 @@ class GitClient:
             return self.diff_cache[git_obj]
         command: List[str] = [
             "git",
+            "-P",
             "-C",
             self.root.__str__(),
             "diff",
@@ -132,7 +133,7 @@ class GitClient:
 
     def get_status(self) -> Changelist:
         raw_output: str = sb.check_output(
-            ["git", "-C", self.root.__str__(), "status", "--porcelain"], text=True, encoding="utf-8", errors="replace"
+            ["git", "-P", "-C", self.root.__str__(), "status", "--porcelain"], text=True, encoding="utf-8", errors="replace"
         )
         changes: List[List[str]] = list(
             map(
