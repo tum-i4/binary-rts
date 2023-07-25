@@ -48,6 +48,12 @@ struct SymbolCache {
 
     CoveredSymbol *findSymbol(const std::string &moduleName, size_t offset);
 
+    bool hasLoadedModule(const std::string &moduleName) {
+        return modules.find(moduleName) != modules.end();
+    }
+
+    void loadSymbolsFromDisk(const std::string &moduleName, const fs::path &modulePath);
+
 private:
     ModuleMap modules;
     std::optional<std::pair<std::string, SymbolMap *>> lastQueriedModule;
@@ -89,6 +95,7 @@ struct ResolverOptions {
     std::string regex;
     fs::path root;
     bool debug;
+    bool resolveSymbols;
 };
 
 // Symbol resolving orchestration class.

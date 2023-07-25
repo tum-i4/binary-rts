@@ -1,7 +1,8 @@
 import logging
 import os
+from collections import defaultdict
 from pathlib import Path
-from typing import List, Set, Optional
+from typing import List, Set, Optional, Dict
 
 import typer
 
@@ -163,3 +164,140 @@ def coverage(
     output_file: Path = output / converter.OUTPUT_FILE
     logging.info(f"Storing coverage to {output_file}.")
     output_file.write_text(coverage_data)
+
+
+@app.command()
+def compare_traces(
+    old_function_lookup_file: Path = typer.Option(
+        ...,
+        "--old-lookup",
+        exists=True,
+        file_okay=True,
+        dir_okay=False,
+        resolve_path=True,
+    ),
+    old_test_function_traces_file: Path = typer.Option(
+        ...,
+        "--old-traces",
+        exists=True,
+        file_okay=True,
+        dir_okay=False,
+        resolve_path=True,
+    ),
+    new_function_lookup_file: Path = typer.Option(
+        ...,
+        "--new-lookup",
+        exists=True,
+        file_okay=True,
+        dir_okay=False,
+        resolve_path=True,
+    ),
+    new_test_function_traces_file: Path = typer.Option(
+        ...,
+        "--new-traces",
+        exists=True,
+        file_okay=True,
+        dir_okay=False,
+        resolve_path=True,
+    ),
+    output: Path = typer.Option(
+        lambda: Path(os.getcwd()),
+        "-o",
+        writable=True,
+        exists=False,
+        file_okay=False,
+        dir_okay=True,
+        resolve_path=True,
+    ),
+):
+    """Compare two test traces and lookup files."""
+    old_function_lookup_table: FunctionLookupTable
+    if has_ext(old_function_lookup_file, exts=[".csv"]):
+        old_function_lookup_table = FunctionLookupTable.from_csv(
+            old_function_lookup_file
+        )
+    elif has_ext(old_function_lookup_file, exts=[".pkl"]):
+        old_function_lookup_table = FunctionLookupTable.from_pickle(
+            old_function_lookup_file
+        )
+    else:
+        raise Exception(
+            "Provided invalid function lookup file format, only .csv and .pkl are currently supported."
+        )
+    new_function_lookup_table: FunctionLookupTable
+    if has_ext(new_function_lookup_file, exts=[".csv"]):
+        new_function_lookup_table = FunctionLookupTable.from_csv(
+            new_function_lookup_file
+        )
+    elif has_ext(new_function_lookup_file, exts=[".pkl"]):
+        new_function_lookup_table = FunctionLookupTable.from_pickle(
+            new_function_lookup_file
+        )
+    else:
+        raise Exception(
+            "Provided invalid function lookup file format, only .csv and .pkl are currently supported."
+        )
+
+    old_test_function_traces: TestFunctionTraces
+    if has_ext(old_test_function_traces_file, exts=[".csv"]):
+        old_test_function_traces = TestFunctionTraces.from_csv(
+            old_test_function_traces_file,
+            (old_test_function_traces_file.parent / TEST_LOOKUP_FILE)
+            if (old_test_function_traces_file.parent / TEST_LOOKUP_FILE).exists()
+            else None,
+        )
+    elif has_ext(old_test_function_traces_file, exts=[".pkl"]):
+        old_test_function_traces = TestFunctionTraces.from_pickle(
+            old_test_function_traces_file
+        )
+    else:
+        raise Exception(
+            "Provided invalid test traces file format, only .csv and .pkl are currently supported."
+        )
+    new_test_function_traces: TestFunctionTraces
+    if has_ext(new_test_function_traces_file, exts=[".csv"]):
+        new_test_function_traces = TestFunctionTraces.from_csv(
+            new_test_function_traces_file,
+            (new_test_function_traces_file.parent / TEST_LOOKUP_FILE)
+            if (new_test_function_traces_file.parent / TEST_LOOKUP_FILE).exists()
+            else None,
+        )
+    elif has_ext(new_test_function_traces_file, exts=[".pkl"]):
+        new_test_function_traces = TestFunctionTraces.from_pickle(
+            new_test_function_traces_file
+        )
+    else:
+        raise Exception(
+            "Provided invalid test traces file format, only .csv and .pkl are currently supported."
+        )
+
+    missing_functions: Dict[str, List[str]] = defaultdict(list)
+    total_old_func_names: Set[str] = set()
+    for test, function_ids in old_test_function_traces.table.items():
+        old_func_names: Set[str] = {
+            old_function_lookup_table.get_function_by_identifier(func_id).full_name
+            for func_id in function_ids
+        }
+        total_old_func_names |= old_func_names
+        if test not in new_test_function_traces.table:
+            missing_functions[test] = list(old_func_names)
+            continue
+        new_func_names: Set[str] = {
+            new_function_lookup_table.get_function_by_identifier(func_id).full_name
+            for func_id in new_test_function_traces.table[test]
+        }
+        diff: Set[str] = old_func_names - new_func_names
+        if len(diff) > 0:
+            missing_functions[test] = list(diff)
+
+    logging.info(f"Missing functions in {len(missing_functions.keys())} tests.")
+    logging.info(
+        f"Number of distinct missing functions: {len(set(sum(missing_functions.values(), [])))} "
+        f"of {len(total_old_func_names)} total functions."
+    )
+    output_file: Path = output / "diff.json"
+    logging.info(
+        f"Writing missing functions to file {output_file}"
+    )
+    output_file.write_text(f"{missing_functions}")
+

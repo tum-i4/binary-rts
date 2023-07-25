@@ -3,40 +3,52 @@
 #include <filesystem>
 #include <vector>
 #include <regex>
+#include <unordered_map>
 
 namespace fs = std::filesystem;
 
-// FunctionExtractor CLI options.
-struct FunctionExtractorOptions {
+enum class ExtractorMode {
+    LINES,
+    SYMBOLS
+};
+
+struct ExtractorOptions {
     fs::path file;
     std::string sourcePattern;
     bool debug;
+    ExtractorMode mode;
 };
 
-struct FunctionDefinition {
+struct SourceLine {
     std::string name;
     std::string file;
     uint64_t line;
     size_t offset;
 };
 
-using FunctionDefinitions = std::vector<FunctionDefinition>;
+using SourceLines = std::vector<SourceLine>;
+using OffsetMap = std::unordered_map<size_t, SourceLine>;
 
-class FunctionExtractor {
+class SourceLineExtractor {
 public:
-    explicit FunctionExtractor(const FunctionExtractorOptions& options) : options{ options } {
-        sourcePattern = std::regex(options.sourcePattern);
+    explicit SourceLineExtractor(const ExtractorOptions& options) : options{options},
+                                                                    sourcePattern{options.sourcePattern} {
     }
 
-    void extractFunctions();
+    void extractSourceLines();
 
 private:
     void initSymbolServer();
+
     void cleanupSymbolServer();
 
-    void writeFunctions(const FunctionDefinitions& functions);
+    OffsetMap extractAllSourceLines();
 
-    const FunctionExtractorOptions& options;
-    std::regex sourcePattern;
+    SourceLines filterSourceLinesForSymbols(OffsetMap& sourceLinesOffsetMap);
+
+    void writeSourceLinesToOutput(const SourceLines &sourceLines);
+
+    const ExtractorOptions options;
+    const std::regex sourcePattern;
     bool isInitialized = false;
 };

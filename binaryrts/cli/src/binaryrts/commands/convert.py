@@ -3,9 +3,8 @@ import os
 import random
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Optional, Set, Tuple
+from typing import List, Optional, Set, Tuple, Iterable
 
-import numpy as np
 import typer
 
 from binaryrts.parser.coverage import (
@@ -25,7 +24,7 @@ from binaryrts.parser.coverage import (
     PICKLE_TEST_FILE_TRACES_FILE,
 )
 from binaryrts.util.fs import delete_files
-from binaryrts.util.mp import run_with_multi_processing
+from binaryrts.util.mp import run_with_multi_threading
 
 app = typer.Typer()
 
@@ -134,22 +133,16 @@ def _filter_and_sort_coverage_files(
 
 def _parse_coverage_files(
     coverage_files: List[Path], parser: CoverageParser, parse_syscalls: bool = False
-) -> List[TestCoverage]:
-    logging.warning(f"Worker parsing {len(coverage_files)} coverage files...")
-    test_coverage: List[TestCoverage] = []
+) -> Iterable[TestCoverage]:
     for file in coverage_files:
         if parse_syscalls:
             coverage: Optional[TestCoverage] = parser.parse_syscalls(syscalls_file=file)
         else:
             coverage: Optional[TestCoverage] = parser.parse_coverage(coverage_file=file)
         if coverage:
-            test_coverage.append(coverage)
+            yield coverage
         else:
             logging.debug(f"Failed to parse coverage from {file}")
-    logging.warning(
-        f"Worker done parsing {len(coverage_files)}, found {len(test_coverage)} valid test coverage dumps."
-    )
-    return test_coverage
 
 
 @app.command()
@@ -182,6 +175,11 @@ def cpp(
         "--test-lookup",
         help="Whether to create a test lookup file (by default, one will be created) "
         "or store the test information inside the test traces.",
+    ),
+    use_extracted_symbols: bool = typer.Option(
+        False,
+        "--extractor",
+        help="If enabled, readily extracted symbol information are used (as obtained from BinaryRTS extractor).",
     ),
 ):
     """
@@ -231,13 +229,19 @@ def cpp(
             coverage_dirs: Set[Path] = {
                 coverage_file.parent for coverage_file in all_coverage_files
             }
-            mp_iterable: List[Tuple[Path, str, str, Path]] = [
-                (p, extension, opts.regex, symbol_resolver_executable)
+            mp_args: List[Tuple[Path, str, str, Path, bool]] = [
+                (
+                    p,
+                    extension,
+                    opts.regex,
+                    symbol_resolver_executable,
+                    use_extracted_symbols,
+                )
                 for p in coverage_dirs
             ]
-            run_with_multi_processing(
+            run_with_multi_threading(
                 func=call_symbol_resolver,
-                iterable=mp_iterable,
+                arguments=mp_args,
                 n_cpu=opts.n_processes,
             )
         else:
@@ -246,52 +250,19 @@ def cpp(
                 extension=extension,
                 file_regex=opts.regex,
                 symbol_resolver_executable=symbol_resolver_executable,
+                use_extracted_symbols=use_extracted_symbols,
             )
-
-    all_test_coverage: List[TestCoverage]
-    if opts.n_processes > 1:
-        logging.info(
-            f"Starting {opts.n_processes} processes for {len(all_coverage_files)} paths."
-        )
-        # in the case of multi-processing, we shuffle for at least random distribution of large coverage files
-        random.shuffle(all_coverage_files)
-        per_dir_coverage: List[List[TestCoverage]] = run_with_multi_processing(
-            func=_parse_coverage_files,
-            iterable=[
-                (
-                    coverage_files,
-                    parser,
-                    False,
-                )
-                for coverage_files in np.array_split(
-                    all_coverage_files, opts.n_processes
-                )
-                if len(coverage_files) > 0
-            ],
-            n_cpu=opts.n_processes,
-        )
-        logging.info(
-            f"Parsed {len(per_dir_coverage)} coverage dumps, aggregating to total coverage."
-        )
-        all_test_coverage = sum(per_dir_coverage, [])
-    else:
-        all_test_coverage = _parse_coverage_files(
-            coverage_files=all_coverage_files,
-            parser=parser,
-            parse_syscalls=False,
-        )
-
-    logging.info(
-        "Done with collecting and parsing coverage files, starting to construct traces."
-    )
+        logging.info("Done with symbol resolving, starting to create test traces.")
     # create function test traces and function lookups
     function_lookup_table: FunctionLookupTable = FunctionLookupTable(
         root_dir=opts.repo_root_dir
     )
     test_function_traces: TestFunctionTraces = TestFunctionTraces()
-    for idx, test_coverage in enumerate(all_test_coverage):
+    for test_coverage in _parse_coverage_files(
+        coverage_files=all_coverage_files, parser=parser, parse_syscalls=False
+    ):
         logging.debug(
-            f"Adding coverage ({idx + 1}/{len(all_test_coverage)}): "
+            f"Adding coverage: "
             f"{test_coverage.test_module}:"
             f"{test_coverage.test_suite}:"
             f"{test_coverage.test_case}"
@@ -355,45 +326,14 @@ def syscalls(
             file for file in sorted(opts.input_dir.glob(f"**/{opts.lookup_file_name}"))
         ],
     )
-
     all_coverage_files: List[Path] = _filter_and_sort_coverage_files(
         opts.input_dir, extension=extension, lookup_file_name=opts.lookup_file_name
     )
-
-    all_test_coverage: List[TestCoverage]
-    if opts.n_processes > 1:
-        # in the case of multi-processing, we shuffle for at least random distribution of large coverage files
-        random.shuffle(all_coverage_files)
-        per_dir_coverage: List[List[TestCoverage]] = run_with_multi_processing(
-            func=_parse_coverage_files,
-            iterable=[
-                (
-                    coverage_files,
-                    parser,
-                    True,
-                )
-                for coverage_files in np.array_split(
-                    all_coverage_files, opts.n_processes
-                )
-                if len(coverage_files) > 0
-            ],
-            n_cpu=opts.n_processes,
-        )
-        all_test_coverage = sum(per_dir_coverage, [])
-    else:
-        all_test_coverage = _parse_coverage_files(
-            coverage_files=all_coverage_files,
-            parser=parser,
-            parse_syscalls=True,
-        )
-
-    logging.info(
-        "Done with collecting and parsing syscall files, starting to construct traces."
-    )
-
     # create file-level per-test traces
     test_file_traces: TestFileTraces = TestFileTraces(root_dir=opts.repo_root_dir)
-    for coverage in all_test_coverage:
+    for coverage in _parse_coverage_files(
+        coverage_files=all_coverage_files, parser=parser, parse_syscalls=True
+    ):
         test_file_traces.add_coverage(coverage)
 
     if opts.binary_output:

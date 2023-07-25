@@ -229,7 +229,6 @@ class CSourceCodeParser:
         if ctags_output:
             if self.use_cache:
                 self.ctags_output_cache[file] = ctags_output
-            self.ctags_output_cache[file] = ctags_output
             for line in ctags_output.splitlines():
                 try:
                     data: Dict = json.loads(line)

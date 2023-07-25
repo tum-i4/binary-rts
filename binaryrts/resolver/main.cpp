@@ -13,6 +13,7 @@ initOptions(int argc, const char *argv[], ResolverOptions &opts) {
     opts.ext = ".log";
     opts.regex = "";
     opts.root = ".";
+    opts.resolveSymbols = true;
     opts.debug = false;
 
     for (int i = 1; i < argc; i++) {
@@ -26,6 +27,8 @@ initOptions(int argc, const char *argv[], ResolverOptions &opts) {
         } else if (token == "-root") {
             assert(("Missing root directory", (i + 1) < argc));
             opts.root = argv[++i];
+        } else if (token == "-extracted") {
+            opts.resolveSymbols = false;
         } else if (token == "-debug") {
             opts.debug = true;
         }

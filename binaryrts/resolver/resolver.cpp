@@ -13,7 +13,7 @@ namespace {
     const char *DUMP_LOOKUP_FILE = "dump-lookup.log";
     const char *FINAL_DUMP_FILE = "coverage.log";  // irrelevant coverage file
     const size_t MAX_SYM_RESULT = 256;
-    const size_t MAX_LINE_LENGTH = 512;
+    const size_t MAX_LINE_LENGTH = 1024;
 }
 
 namespace fs = std::filesystem;
@@ -61,13 +61,51 @@ SymbolCache::findSymbol(const std::string &moduleName, const size_t offset) {
         symbol->status = lastSymbol->status;
     } else {
         symbol->status = CoveredSymbol::SymbolStatus::UNRESOLVED;
+        // Update last queried module and symbol.
+        lastQueriedModule.emplace(std::make_pair(moduleName, symbolMap));
+        lastQueriedSymbol.emplace(std::make_pair(offset, symbol));
     }
 
-    // Update last queried module and symbol.
-    lastQueriedModule.emplace(std::make_pair(moduleName, symbolMap));
-    lastQueriedSymbol.emplace(std::make_pair(offset, symbol));
-
     return symbol;
+}
+
+void
+SymbolCache::loadSymbolsFromDisk(const std::string &moduleName, const fs::path &modulePath) {
+    // This will create an empty map for the module in any case.
+    SymbolMap *symbolMap = &modules[moduleName];
+    fs::path symbolsFile = modulePath.parent_path() / (moduleName + ".binaryrts");
+    if (!fs::exists(symbolsFile)) {
+        printf("ERROR: Could not locate symbols file at %s\n", symbolsFile.string().c_str());
+        return;
+    }
+
+    // Read symbols line by line from file.
+    FILE *fp = fopen(symbolsFile.string().c_str(), "r");
+    char buffer[MAX_LINE_LENGTH];
+    while (fgets(buffer, MAX_LINE_LENGTH, fp)) {
+        size_t offset;
+        char file[MAXIMUM_PATH];
+        char name[MAX_SYM_RESULT];
+        uint64_t line;
+        sscanf(buffer,
+               "0x%zx" NON_FILE_PATH_SEP "%s" NON_FILE_PATH_SEP "%s" NON_FILE_PATH_SEP "%lu\n",
+               &offset,
+               file,
+               name,
+               &line);
+        std::unique_ptr<CoveredSymbol> &entry = (*symbolMap)[offset];
+        if (!entry) {
+            entry = std::make_unique<CoveredSymbol>();
+            entry->offset = offset;
+            entry->file = std::string(file);
+            entry->line = line;
+            entry->start = offset;
+            entry->end = offset;
+            entry->name = std::string(name);
+            entry->status = CoveredSymbol::SymbolStatus::RESOLVED;
+        }
+    }
+    fclose(fp);
 }
 
 void
@@ -95,6 +133,12 @@ SymbolResolver::cleanupSymbolServer() {
 
 const CoveredSymbol *
 SymbolResolver::findSymbol(const std::string &moduleName, const fs::path &modulePath, const size_t offset) {
+    // In case we're not resolving symbols but use pre-extracted symbol information,
+    // we need to read them once from disk here.
+    if (!options.resolveSymbols && !cache.hasLoadedModule(moduleName)) {
+        cache.loadSymbolsFromDisk(moduleName, modulePath);
+    }
+
     CoveredSymbol *symbol = cache.findSymbol(moduleName, offset);
 
     switch (symbol->status) {
@@ -106,6 +150,13 @@ SymbolResolver::findSymbol(const std::string &moduleName, const fs::path &module
             symbolMatchCounter++;
             return nullptr;
         default:
+            if (!options.resolveSymbols) {
+                if (options.debug) {
+                    printf("DEBUG: Symbol not found 0x%zx in %s\n", symbol->offset, modulePath.string().c_str());
+                }
+                symbol->status = CoveredSymbol::SymbolStatus::NOT_FOUND;
+                return nullptr;
+            }
             char file[MAXIMUM_PATH];
             char name[MAX_SYM_RESULT];
             drsym_error_t symres;
@@ -134,22 +185,26 @@ SymbolResolver::findSymbol(const std::string &moduleName, const fs::path &module
                 } else {
                     symbol->status = CoveredSymbol::SymbolStatus::RESOLVED;
                 }
-                // We add the start and end offsets to the symbol cache as well.
-                cache.findSymbol(moduleName, symbol->start);
-                cache.findSymbol(moduleName, symbol->end);
-                return symbol->status == CoveredSymbol::SymbolStatus::RESOLVED ? symbol : nullptr;
             } else if (symres == DRSYM_ERROR_LOAD_FAILED) {
-                printf("WARN: Load failed for symbol 0x%zx in %s\n", symbol->offset, modulePath.string().c_str());
+                if (options.debug)
+                    printf("WARN: Load failed for symbol 0x%zx in %s\n", symbol->offset, modulePath.string().c_str());
             } else if (symres == DRSYM_ERROR_SYMBOL_NOT_FOUND) {
-                printf("WARN: Symbol not found 0x%zx in %s\n", symbol->offset, modulePath.string().c_str());
+                if (options.debug)
+                    printf("WARN: Symbol not found 0x%zx in %s\n", symbol->offset, modulePath.string().c_str());
             } else if (symres == DRSYM_ERROR_NOMEM) {
-                printf("WARN: Memory leak when querying symbol 0x%zx in %s\n", symbol->offset,
-                       modulePath.string().c_str());
+                if (options.debug)
+                    printf("WARN: Memory leak when querying symbol 0x%zx in %s\n", symbol->offset,
+                           modulePath.string().c_str());
             }
-
             // In case we didn't find symbols, we still update the status for the cached offset.
-            symbol->status = CoveredSymbol::SymbolStatus::NOT_FOUND;
-            return nullptr;
+            if (symbol->status != CoveredSymbol::SymbolStatus::EXCLUDED &&
+                symbol->status != CoveredSymbol::SymbolStatus::RESOLVED) {
+                symbol->status = CoveredSymbol::SymbolStatus::NOT_FOUND;
+            }
+            // We add the start and end offsets to the symbol cache as well.
+            cache.findSymbol(moduleName, symbol->start);
+            cache.findSymbol(moduleName, symbol->end);
+            return symbol->status == CoveredSymbol::SymbolStatus::RESOLVED ? symbol : nullptr;
     }
 }
 
@@ -185,7 +240,7 @@ SymbolResolver::analyzeCoverageFile(const fs::path &file) {
                 ModuleCoverage coveredModule;
                 coveredModule.modulePath = line.substr(pathStartPos + 1, lineEndPos - pathStartPos - 1);
                 coveredModule.moduleName = coveredModule.modulePath.filename().string();
-                testCoverage.push_back(coveredModule);
+                testCoverage.emplace_back(std::move(coveredModule));
                 currentModule = &testCoverage.back();
                 cursorBelowModuleName = true;
             }
